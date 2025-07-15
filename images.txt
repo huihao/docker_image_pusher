@@ -2,5 +2,6 @@ nginx
 #支持私库
 k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0
 xhofe/alist:latest
+ghcr.io/coder/coder:sha256-c7ef36e198f5c332718d5e645204ee9c48051afea6fc951f12915970d49bcecc.att
 #支持指定架构
 --platform=linux/arm64 xiaoyaliu/alist
