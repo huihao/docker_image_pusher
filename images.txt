@@ -1,1 +1,2 @@
 ghcr.io/coder/coder
+ghcr.io/coder/envbuilder
