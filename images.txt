@@ -1,2 +1,3 @@
 ghcr.io/coder/coder
 ghcr.io/coder/envbuilder
+docker.io/codercom/enterprise-base:ubuntu-20240722
