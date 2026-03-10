@@ -3,4 +3,4 @@ ghcr.io/coder/envbuilder
 docker.io/codercom/enterprise-base:ubuntu-20240722
 docker.io/codercom/example-universal:ubuntu
 docker.io/grafana/grafana
-docker://node:22-bookworm-slim
+docker.io/library/node:22-bookworm-slim
