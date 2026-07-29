@@ -42,6 +42,17 @@ jobs:
     - name: Restart docker
       run: sudo service docker restart
 
+    - name: Configure Docker daemon
+      run: |
+        sudo mkdir -p /etc/docker
+        sudo tee /etc/docker/daemon.json > /dev/null <<EOF
+        {
+          "max-concurrent-uploads": 1,
+          "max-concurrent-downloads": 3
+        }
+        EOF
+        sudo service docker restart
+
     - name: Free up disk space complete
       run: |
         echo "Free up disk space complete"
@@ -142,7 +153,27 @@ jobs:
             echo "docker tag $image $new_image"
             docker tag $image $new_image
             echo "docker push $new_image"
-            docker push $new_image
+            push_with_retry() {
+                local image="$1"
+                local max_attempts=3
+                local attempt=1
+                while [ $attempt -le $max_attempts ]; do
+                    echo "Attempt $attempt/$max_attempts: docker push $image"
+                    if timeout 600 docker push "$image"; then
+                        echo "Push succeeded on attempt $attempt"
+                        return 0
+                    fi
+                    echo "Push failed on attempt $attempt"
+                    attempt=$((attempt + 1))
+                    if [ $attempt -le $max_attempts ]; then
+                        echo "Waiting 10 seconds before retry..."
+                        sleep 10
+                    fi
+                done
+                echo "Push failed after $max_attempts attempts"
+                return 1
+            }
+            push_with_retry "$new_image"
             echo "开始清理磁盘空间"
             echo "=============================================================================="
             df -hT
