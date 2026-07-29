@@ -63,12 +63,14 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Docker Setup Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Build and push image Aliyun
+    - name: Install skopeo
       run: |
-        docker login -u $ALIYUN_REGISTRY_USER -p $ALIYUN_REGISTRY_PASSWORD $ALIYUN_REGISTRY
+        sudo apt-get update
+        sudo apt-get install -y skopeo
+
+    - name: Copy images to Aliyun with skopeo
+      run: |
+        skopeo login --username "$ALIYUN_REGISTRY_USER" --password "$ALIYUN_REGISTRY_PASSWORD" "$ALIYUN_REGISTRY"
         # 数据预处理,判断镜像是否重名
         declare -A duplicate_images
         declare -A temp_map
@@ -118,19 +120,23 @@ jobs:
                 continue
             fi
         
-            echo "docker pull $line"
-            docker pull $line
             platform=$(echo "$line" | awk -F'--platform[ =]' '{if (NF>1) print $2}' | awk '{print $1}')
             echo "platform is $platform"
             # 如果存在架构信息 将架构信息拼到镜像名称前面
             if [ -z "$platform" ]; then
                 platform_prefix=""
+                platform_args=""
             else
                 platform_prefix="${platform//\//_}_"
+                os=$(echo "$platform" | cut -d'/' -f1)
+                arch=$(echo "$platform" | cut -d'/' -f2)
+                platform_args="--override-os=$os --override-arch=$arch"
             fi
             echo "platform_prefix is $platform_prefix"
             # 获取镜像的完整名称，例如kasmweb/nginx:1.25.3（命名空间/镜像名:版本号）
             image=$(echo "$line" | awk '{print $NF}')
+            # 将@sha256:等字符删除
+            image="${image%%@*}"
 
             # 获取 镜像名:版本号  例如nginx:1.25.3
             image_name_tag=$(echo "$image" | awk -F'/' '{print $NF}')
@@ -151,31 +157,33 @@ jobs:
             # 将@sha256:等字符删除
             image_name_tag="${image_name_tag%%@*}"
             new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_name_tag"
-            echo "docker tag $image $new_image"
-            docker tag $image $new_image
-            echo "docker push $new_image"
-            push_with_retry() {
-                local image="$1"
+            echo "skopeo copy docker://$image docker://$new_image"
+            
+            copy_with_retry() {
+                local src="$1"
+                local dst="$2"
+                local extra_args="$3"
                 local max_attempts=3
                 local attempt=1
                 while [ $attempt -le $max_attempts ]; do
-                    echo "Attempt $attempt/$max_attempts: docker push $image"
-                    if timeout 1800 docker push "$image"; then
-                        echo "Push succeeded on attempt $attempt"
+                    echo "Attempt $attempt/$max_attempts: skopeo copy $src -> $dst"
+                    if timeout 1800 skopeo copy $extra_args "$src" "$dst"; then
+                        echo "Copy succeeded on attempt $attempt"
                         return 0
                     fi
-                    echo "Push failed on attempt $attempt"
+                    echo "Copy failed on attempt $attempt"
                     attempt=$((attempt + 1))
                     if [ $attempt -le $max_attempts ]; then
                         echo "Waiting 30 seconds before retry..."
                         sleep 30
                     fi
                 done
-                echo "Push failed after $max_attempts attempts"
+                echo "Copy failed after $max_attempts attempts"
                 return 1
             }
-            if push_with_retry "$new_image"; then
-                echo "Push completed successfully"
+            
+            if copy_with_retry "docker://$image" "docker://$new_image" "$platform_args"; then
+                echo "Copy completed successfully"
             else
                 failed_images+=("$new_image")
             fi
@@ -183,8 +191,6 @@ jobs:
             echo "=============================================================================="
             df -hT
             echo "=============================================================================="
-            docker rmi $image
-            docker rmi $new_image
             echo "磁盘空间清理完毕"
             echo "=============================================================================="
             df -hT
