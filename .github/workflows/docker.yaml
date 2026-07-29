@@ -110,6 +110,7 @@ jobs:
         done < images.txt
         
         
+        failed_images=()
         while IFS= read -r line || [ -n "$line" ]; do
             # 忽略空行与注释
             [[ -z "$line" ]] && continue
@@ -159,21 +160,25 @@ jobs:
                 local attempt=1
                 while [ $attempt -le $max_attempts ]; do
                     echo "Attempt $attempt/$max_attempts: docker push $image"
-                    if timeout 600 docker push "$image"; then
+                    if timeout 1800 docker push "$image"; then
                         echo "Push succeeded on attempt $attempt"
                         return 0
                     fi
                     echo "Push failed on attempt $attempt"
                     attempt=$((attempt + 1))
                     if [ $attempt -le $max_attempts ]; then
-                        echo "Waiting 10 seconds before retry..."
-                        sleep 10
+                        echo "Waiting 30 seconds before retry..."
+                        sleep 30
                     fi
                 done
                 echo "Push failed after $max_attempts attempts"
                 return 1
             }
-            push_with_retry "$new_image"
+            if push_with_retry "$new_image"; then
+                echo "Push completed successfully"
+            else
+                failed_images+=("$new_image")
+            fi
             echo "开始清理磁盘空间"
             echo "=============================================================================="
             df -hT
@@ -186,3 +191,13 @@ jobs:
             echo "=============================================================================="     
             
         done < images.txt
+
+        if [ ${#failed_images[@]} -gt 0 ]; then
+            echo "=============================================================================="
+            echo "以下镜像推送失败："
+            for img in "${failed_images[@]}"; do
+                echo "  - $img"
+            done
+            echo "=============================================================================="
+            exit 1
+        fi
