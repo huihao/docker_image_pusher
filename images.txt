@@ -1,2 +1,11 @@
 docker.io/library/node:22-bookworm-slim
 docker.io/library/nginx:stable-trixie
+docker.io/library/postgres:15-alpine
+docker.io/library/redis:7-alpine
+docker.io/library/mongo:6
+docker.io/library/zookeeper:3.8
+docker.io/apache/rocketmq:4.9.7
+docker.io/library/maven:3.8.8-eclipse-temurin-8
+docker.io/library/eclipse-temurin:8-jre
+docker.io/library/node:20-alpine
+docker.io/library/nginx:1.27-alpine
